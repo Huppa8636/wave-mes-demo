@@ -1,0 +1,194 @@
+ring(36)}
+function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+const titles={dash:['전사 업무 통합현황','비즈메카 최초 기안번호를 중심으로 작업·LTC·품질 이력을 연결합니다.'],req:['생산 작업요청','PDF Load 및 작업요청 접수 DEMO'],reqs:['작업요청 현황','중심 추적키와 참조 PO를 분리하여 관리합니다.'],qreq:['품질 검사 요청','검사요청 PDF 인식 및 수입/출하검사 접수'],ltc:['디지털 LTC','LOT별 공정실적을 자유 Routing 방식으로 관리합니다.'],test:['현장 LTC 입력 TEST','QR/바코드 조회 후 최소 입력으로 공정실적을 등록합니다.'],inv:['재고 / 예약','현재고 / 예약·가용재고 및 수입검사 상태'],quality:['품질 / 부적합','수입/출하검사와 부적합 현황']};
+
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
+function show(v){document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===v));document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.v===v));document.querySelector('#title').textContent=titles[v][0];document.querySelector('#sub').textContent=titles[v][1]}
+
+function statusClass(st){if(st.includes('완료')||st==='접수완료')return 'good';if(st.includes('부적합'))return 'bad';return 'warn'}
+function ltcForDraft(d){return s.ltcs.find(l=>l.draft===d)}
+function progressFor(r){
+  const l=ltcForDraft(r.draft);
+  if(!l){
+    if(r.status==='출하완료')return 100;
+    return 0;
+  }
+  return Math.round(l.done.length/routes.length*100);
+}
+function daysLeft(due){
+  if(!due)return null;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const d=new Date(due+'T00:00:00');
+  return Math.ceil((d-today)/86400000);
+}
+function dueRiskClass(d){
+  if(d===null)return 'status';
+  if(d<=2)return 'status risk-red';
+  if(d<=5)return 'status risk-orange';
+  return 'status risk-green';
+}
+function dueRiskText(d){
+  if(d===null)return '납기 미정';
+  if(d<0)return `D+${Math.abs(d)} 지연`;
+  if(d===0)return 'D-DAY';
+  return `D-${d}`;
+}
+let expandedLtcDraft=null;
+function toggleLtc(draft){
+  expandedLtcDraft = expandedLtcDraft===draft ? null : draft;
+  renderLtc();
+}
+function focusLtc(draft){
+  expandedLtcDraft=draft;
+  show('ltc');
+  renderLtc();
+  setTimeout(()=>document.getElementById('ltc-'+draft)?.scrollIntoView({behavior:'smooth',block:'center'}),50);
+}
+
+let ocrLibReady=false;
+async function ensureScript(src,globalName){
+  if(globalThis[globalName])return;
+  await new Promise((resolve,reject)=>{
+    const s=document.createElement('script'); s.src=src; s.onload=resolve; s.onerror=reject; document.head.appendChild(s);
+  });
+}
+async function ensureOcrLibs(){
+  if(ocrLibReady)return;
+  await ensureScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js','pdfjsLib');
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  await ensureScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js','Tesseract');
+  ocrLibReady=true;
+}
+
+function normalizeOcrText(t){
+  return String(t||'')
+    .replace(/\r/g,'\n')
+    .replace(/[｜|]/g,' ')
+    .replace(/[ \t]+/g,' ')
+    .replace(/\n[ \t]+/g,'\n')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+}
+function cleanValue(v){
+  return String(v||'').replace(/^[\s:：#=\-–—]+/,'').replace(/[\s|]+$/,'').trim();
+}
+function isLabelLike(s){
+  const x=String(s||'').replace(/\s/g,'').toLowerCase();
+  return /(기안번호|문서번호|고객|품번|품명|제품|모델|수량|qty|quantity|납기|duedate|검사|요청일|프로젝트|project|partno|p\/n)/i.test(x);
+}
+function valueAfterAlias(lines, aliases, validator){
+  for(let i=0;i<lines.length;i++){
+    const raw=lines[i], compact=raw.replace(/\s+/g,' ');
+    for(const a of aliases){
+      const re=new RegExp(a,'i');
+      if(!re.test(compact))continue;
+      let rest=cleanValue(compact.replace(re,''));
+      if(rest && (!validator || validator(rest))) return rest;
+      for(let j=i+1;j<Math.min(lines.length,i+4);j++){
+        const n=cleanValue(lines[j]);
+        if(!n || isLabelLike(n)) continue;
+        if(!validator || validator(n)) return n;
+      }
+    }
+  }
+  return '';
+}
+function firstCode(s){
+  const candidates=String(s||'').match(/[A-Z0-9][A-Z0-9_.\/-]{2,}/gi)||[];
+  return candidates.find(x=>!/^\d+$/.test(x) && !/^20\d{6}-\d{4}$/.test(x) && !/^(ea|qty|no)$/i.test(x))||'';
+}
+
+function detectDocumentType(text){
+  const t=normalizeOcrText(text);
+  const workOrder = /작\s*업\s*요\s*청\s*서/i.test(t) || /Hybrid\s*Ass'?y\s*작\s*업\s*요\s*청\s*서/i.test(t) || /Assembly/i.test(t) && /작\s*업\s*요\s*청/i.test(t);
+  const qualityReq = /품\s*질\s*(?:검\s*사)?\s*(?:요\s*청|의\s*뢰)/i.test(t) || /검\s*사\s*(?:요\s*청|의\s*뢰)\s*서/i.test(t);
+  return workOrder ? 'WORK_ORDER' : (qualityReq ? 'QUALITY_REQUEST' : 'UNKNOWN');
+}
+function extractMappedFields(text){
+  const t=normalizeOcrText(text);
+  const lines=t.split('\n').map(x=>x.trim()).filter(Boolean);
+
+  const draft=(t.match(/\b(20\d{6}\s*[-–—]\s*\d{4})\b/)||[])[1]?.replace(/\s/g,'').replace(/[–—]/g,'-')||'';
+
+  let cust='';
+  const poStrong=t.match(/\b([A-Z]\d{1,3}\/[A-Z]{1,4}\/\d{3,})\b/i);
+  if(poStrong) cust=poStrong[1].toUpperCase();
+  if(!cust){
+    cust=valueAfterAlias(lines,[
+      '발주서\\s*번호','발주\\s*번호','고객사\\s*문서\\s*번호','고객\\s*문서\\s*번호',
+      'Customer\\s*PO','P\\s*\\/?\\s*O\\s*(?:No\\.?|Number)?'
+    ],v=>/[A-Za-z0-9]/.test(v));
+    cust=firstCode(cust)||cust;
+  }
+
+  let prod=valueAfterAlias(lines,[
+    '제\\s*품\\s*명','제품\\s*\\/\\s*품번','제품명\\s*\\/\\s*품번','제품\\s*번호',
+    '품\\s*번','Model','Part\\s*(?:No\\.?|Number)','P\\s*\\/\\s*N'
+  ],v=>/[A-Za-z0-9]/.test(v) && !/frequency|power|qty/i.test(v));
+  let pc=firstCode(prod);
+  if(pc) prod=pc;
+
+  if(!prod || /frequency|power|qty/i.test(prod)){
+    const codes=(t.match(/\b[A-Z][A-Z0-9]{4,}\b/g)||[])
+      .filter(x=>!/^DEMO/i.test(x) && !/^QTY$/i.test(x) && !/^POWER$/i.test(x) && !/^FREQUENCY$/i.test(x));
+    const freq={};
+    for(const c of codes) freq[c]=(freq[c]||0)+1;
+    prod=Object.entries(freq).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+  }
+
+  let qty='';
+  let qraw=valueAfterAlias(lines,['Q\\s*T\\s*Y','요청\\s*수량','작업\\s*수량','생산\\s*수량','수\\s*량'],v=>/\d/.test(v));
+  let qm=String(qraw).match(/(\d[\d,]*)/);
+  if(qm) qty=String(parseInt(qm[1].replace(/,/g,''),10));
+  const titleEa=t.match(/(\d{1,5})\s*E\s*A\s*(?:제작|작업|생산|요청)/i) || t.match(/(\d{1,5})\s*EA\b/i);
+  if(titleEa){
+    const ea=String(parseInt(titleEa[1],10));
+    if(!qty || Number(qty)>999 || (qty.length>1 && Number(qty)%100===Number(ea))) qty=ea;
+    if(Number(qty)!==Number(ea) && Number(ea)>0 && Number(ea)<1000) qty=ea;
+  }
+
+  let due=valueAfterAlias(lines,['완료\\s*요청\\s*일','완료\\s*요청일','요청\\s*납기','납\\s*기','Due\\s*Date','Delivery\\s*Date'],v=>/20\d{2}/.test(v));
+  let dm=String(due).match(/(20\d{2})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/);
+  if(!dm){
+    const dates=[...t.matchAll(/\b(20\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})\b/g)]
+      .map(m=>({raw:m[0],y:+m[1],mo:+m[2],d:+m[3]}))
+      .filter(x=>x.y>=2020);
+    if(dates.length) {
+      const x=dates.sort((a,b)=>new Date(a.y,a.mo-1,a.d)-new Date(b.y,b.mo-1,b.d)).at(-1);
+      dm=[null,String(x.y),String(x.mo),String(x.d)];
+    }
+  }
+  due=dm?`${dm[1]}-${String(dm[2]).padStart(2,'0')}-${String(dm[3]).padStart(2,'0')}`:'';
+
+  let project='';
+  const titleLine=lines.find(x=>/문서\s*제목/i.test(x)) || lines.find(x=>/제작\s*요청|작업\s*요청/i.test(x));
+  if(titleLine){
+    project=cleanValue(titleLine.replace(/문서\s*제목/i,''));
+  }
+  if(!project){
+    const m=t.match(/([가-힣A-Za-z0-9 ]{2,40}\s*향\s*[A-Z0-9_-]{3,}.*?(?:제작|작업)\s*요청\s*건?)/i);
+    if(m) project=cleanValue(m[1]);
+  }
+
+  const type=/수\s*입\s*검\s*사|incoming\s*inspection/i.test(t)?'수입검사':
+             (/출\s*하\s*검\s*사|outgoing\s*inspection|final\s*inspection/i.test(t)?'출하검사':'');
+
+  return {draft,cust,prod,qty,due,type,project,text:t,lines,docType:detectDocumentType(t)};
+}
+async function pdfPageTextByRows(page){
+  const tc=await page.getTextContent();
+  const items=tc.items.filter(x=>String(x.str||'').trim()).map(x=>({
+    text:String(x.str).trim(),
+    x:Number(x.transform?.[4]||0),
+    y:Number(x.transform?.[5]||0)
+  }));
+  const rows=[];
+  for(const it of items.sort((a,b)=>b.y-a.y||a.x-b.x)){
+    let row=rows.find(r=>Math.abs(r.y-it.y)<=3);
+    if(!row){row={y:it.y,items:[]};rows.push(row)}
+    row.items.push(it);
+  }
+  rows.sort((a,b)=>b.y-a.y);
+  return rows.map(r=>r.items.sort((a,b)=>a.x-b.x).map(i=>i.text).join('    ')).join('\n');
+}
+async fun
