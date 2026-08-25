@@ -1,0 +1,1 @@
+Force GitHub Pages rebuild. Current index includes quality inspection request menu and browser PDF/OCR logic without demo PO fallback.
