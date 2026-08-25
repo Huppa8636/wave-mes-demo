@@ -1,0 +1,138 @@
+ction extractPdfTextOrOcr(file,progressCb){
+  await ensureOcrLibs();
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let text='';
+  const maxTextPages=Math.min(pdf.numPages,5);
+  for(let i=1;i<=maxTextPages;i++){
+    progressCb?.(`PDF 텍스트 위치 분석 중 ${i}/${maxTextPages}`,Math.round(i/maxTextPages*30));
+    const page=await pdf.getPage(i);
+    text+=await pdfPageTextByRows(page)+'\n';
+  }
+  let prelim=extractMappedFields(text);
+  const enough=text.replace(/\s/g,'').length>=60 && (prelim.prod || prelim.qty || prelim.cust);
+  if(enough){
+    progressCb?.('PDF 텍스트 인식 완료',100);
+    return {text,mode:'TEXT'};
+  }
+
+  let ocrText='';
+  const maxOcrPages=Math.min(pdf.numPages,2);
+  for(let i=1;i<=maxOcrPages;i++){
+    progressCb?.(`스캔 PDF OCR 중 ${i}/${maxOcrPages}`,35+Math.round((i-1)/maxOcrPages*60));
+    const page=await pdf.getPage(i);
+    const vp=page.getViewport({scale:2.2});
+    const canvas=document.createElement('canvas'); canvas.width=vp.width; canvas.height=vp.height;
+    const ctx=canvas.getContext('2d');
+    ctx.filter='grayscale(1) contrast(1.25)';
+    await page.render({canvasContext:ctx,viewport:vp}).promise;
+    const r=await Tesseract.recognize(canvas,'kor+eng',{logger:m=>{
+      if(m.status==='recognizing text')progressCb?.(`OCR ${i}/${maxOcrPages} · ${Math.round((m.progress||0)*100)}%`,35+Math.round(((i-1)+(m.progress||0))/maxOcrPages*60));
+    }});
+    ocrText+=r.data.text+'\n';
+  }
+  progressCb?.('OCR 인식 완료',100);
+  return {text:text+'\n'+ocrText,mode:'OCR'};
+}
+function ocrStatus(el,msg,pct){
+  el.innerHTML=`<b>${esc(msg)}</b>${pct!=null?`<div class="ocr-progress"><i style="width:${pct}%"></i></div>`:''}`;
+}
+async function loadPdfFile(input){
+  const f=input.files&&input.files[0]; if(!f)return;
+  ['rDraft','rCust','rProd','rDue','rProject'].forEach(id=>document.getElementById(id).value='');
+  rQty.value='';
+  pdfFileName.textContent=f.name;
+  const box=document.getElementById('pdfLoadInfo');
+  box.className='ocrbox'; ocrStatus(box,'작업요청서 확인 및 PDF 인식 준비 중',5);
+  try{
+    const result=await extractPdfTextOrOcr(f,(m,p)=>ocrStatus(box,m,p));
+    const x=extractMappedFields(result.text);
+    document.getElementById('prodRaw') && (prodRaw.textContent=result.text);
+
+    if(x.docType!=='WORK_ORDER'){
+      input.value='';
+      const msg=x.docType==='QUALITY_REQUEST'
+        ? '첨부파일을 확인해 주세요.\n생산 작업요청에서는 [작업요청서]만 첨부할 수 있습니다.\n품질 검사 요청/의뢰서는 왼쪽 [품질 검사 요청] 메뉴에서 등록해 주세요.'
+        : '첨부파일을 확인해 주세요.\n생산 작업요청에서는 [작업요청서] 양식만 첨부할 수 있습니다.';
+      box.innerHTML='<b style="color:#b22936">양식 불일치 · 작업요청서가 아닙니다.</b>';
+      alert(msg);
+      return;
+    }
+
+    if(x.draft)rDraft.value=x.draft;
+    if(x.cust)rCust.value=x.cust;
+    if(x.prod)rProd.value=x.prod;
+    if(x.qty)rQty.value=x.qty;
+    if(x.due)rDue.value=x.due;
+    if(x.project)rProject.value=x.project;
+
+    const missing=[!x.draft?'기안번호':'',!x.cust?'발주서번호/고객PO':'',!x.prod?'제품명':'',!x.qty?'수량':'',!x.due?'완료요청일':''].filter(Boolean);
+    box.innerHTML=`<b>${result.mode==='OCR'?'OCR':'텍스트'} 인식 완료 · 작업요청서 확인</b> / 기안 ${esc(x.draft||'미인식')} / 고객PO ${esc(x.cust||'미인식')} / 제품 ${esc(x.prod||'미인식')} / 수량 ${esc(x.qty||'미인식')} / 납기 ${esc(x.due||'미인식')}${missing.length?`<div class="small" style="margin-top:6px;color:#b22936">확인 필요: ${missing.join(', ')}</div>`:'<div class="small" style="margin-top:6px;color:#087c51">필수 항목 인식 완료 · 접수 가능합니다.</div>'}`;
+  }catch(e){
+    box.innerHTML=`<b>PDF 인식 실패</b> · ${esc(e.message||e)}<div class="small" style="margin-top:5px">파일 또는 OCR 라이브러리 로딩 상태를 확인해 주세요.</div>`;
+  }
+}
+async function loadQualityPdf(input){
+  const f=input.files&&input.files[0]; if(!f)return;
+  ['qDraft','qCust','qProd','qDate','qRemark'].forEach(id=>document.getElementById(id).value='');
+  qQty.value='';
+  qPdfFileName.textContent=f.name;
+  const box=document.getElementById('qOcrInfo'); ocrStatus(box,'PDF 인식 준비 중',5);
+  try{
+    const result=await extractPdfTextOrOcr(f,(m,p)=>ocrStatus(box,m,p));
+    const x=extractMappedFields(result.text);
+    if(x.docType==='WORK_ORDER'){
+      input.value='';
+      qOcrInfo.innerHTML='<b style="color:#b22936">양식 불일치 · 생산 작업요청서입니다.</b>';
+      alert('첨부파일을 확인해 주세요.\n[작업요청서]는 왼쪽 [작업요청] 메뉴에서 등록해 주세요.');
+      return;
+    }
+    if(x.draft)qDraft.value=x.draft;
+    if(x.cust)qCust.value=x.cust;
+    if(x.prod)qProd.value=x.prod;
+    if(x.qty)qQty.value=x.qty;
+    if(x.type)qType.value=x.type;
+    if(!qDate.value)qDate.value=new Date().toISOString().slice(0,10);
+    box.innerHTML=`<b>${result.mode==='OCR'?'OCR':'텍스트'} 인식 완료</b> · ${esc(x.type||'검사구분 확인 필요')} · 기안번호 ${esc(x.draft||'미인식')} · 품번 ${esc(x.prod||'미인식')} · 수량 ${esc(x.qty||'미인식')}<div class="small" style="margin-top:5px">인식값을 확인한 뒤 등록하십시오.</div>`;
+  }catch(e){
+    box.innerHTML=`<b>PDF 인식 실패</b> · ${esc(e.message||e)}<div class="small" style="margin-top:5px">수기 입력은 계속 가능합니다.</div>`;
+  }
+}
+function renderQualityRequests(){
+  const el=document.getElementById('qualityRequestList'); if(!el)return;
+  const a=s.qualityRequests||[];
+  el.innerHTML=a.length?a.map(q=>`<div class="qreq-item"><div class="head"><b class="trace clicktrace" onclick="focusLtc('${esc(q.draft)}')">${esc(q.draft)}</b><span class="status ${q.type==='출하검사'?'warn':'good'}">${esc(q.type)}</span></div><div class="small">${esc(q.prod)} · ${q.qty}ea · 고객문서 ${esc(q.cust||'-')}<br>${esc(q.date||'-')} · ${esc(q.status||'접수완료')}${q.remark?`<br>${esc(q.remark)}`:''}</div></div>`).join(''):'<div class="small">등록된 품질 검사 요청이 없습니다.</div>';
+}
+function addQualityRequest(){
+  const draft=qDraft.value.trim(),type=qType.value,cust=qCust.value.trim(),prod=qProd.value.trim(),qty=Number(qQty.value)||0,date=qDate.value,remark=qRemark.value.trim();
+  if(!draft||!prod||qty<=0)return alert('기안번호, 제품, 검사수량을 확인하십시오.');
+  s.qualityRequests=s.qualityRequests||[];
+  if(s.qualityRequests.some(x=>x.draft===draft&&x.type===type))return alert('동일 기안번호와 검사구분의 요청이 이미 있습니다.');
+  s.qualityRequests.unshift({id:id(),draft,type,cust,prod,qty,date,status:'접수완료',remark});
+  if(!s.quality.some(x=>x.draft===draft&&x.type===type))s.quality.unshift({draft,type,prod,status:'검사대기'});
+  save(); clearQualityRequest();
+}
+function clearQualityRequest(){
+  qDraft.value=''; qCust.value=''; qProd.value=''; qQty.value=1; qRemark.value=''; qDate.value='';
+  qPdfFileName.textContent='선택된 파일 없음'; qOcrInfo.textContent='PDF 선택 대기 · OCR 인식 결과는 브라우저 내부에서만 처리됩니다.';
+}
+
+
+function renderAll(){
+mReq.textContent=s.requests.length;
+mLtc.textContent=s.ltcs.filter(l=>l.done.length<routes.length).length;
+mTest.textContent=s.logs.length;
+mNc.textContent=s.nc.length;
+
+const activeDue=s.requests.filter(r=>r.status!=='출하완료').map(r=>({...r,_d:daysLeft(r.due)})).sort((a,b)=>(a._d??9999)-(b._d??9999)).slice(0,5);
+dueRisk.innerHTML=activeDue.length?activeDue.map(r=>`<div class="due-item"><div><b class="trace clicktrace" onclick="focusLtc('${esc(r.draft)}')">${esc(r.draft)}</b> · ${esc(r.prod)}<div class="small">납기 ${esc(r.due||'-')} · 진척 ${progressFor(r)}% · ${esc(r.status)}</div></div><span class="${dueRiskClass(r._d)}">${dueRiskText(r._d)}</span></div>`).join(''):'<div class="small">납기 리스크 대상이 없습니다.</div>';
+
+scenarioCards.innerHTML=s.requests.map((r,i)=>`<div class="card"><b>${i+1}. ${esc(r.scenario)}</b><span>${esc(r.draft)}<br>${esc(r.prod)}<br><span class="status ${statusClass(r.status)}">${esc(r.status)}</span></span></div>`).join('');
+dashReq.innerHTML=s.requests.slice().reverse().map(r=>`<div class="log"><b class="trace clicktrace" onclick="focusLtc('${esc(r.draft)}')">${esc(r.draft)}</b> · ${esc(r.prod)} · ${r.qty}ea<div class="small">고객문서 ${esc(r.cust)} · ${esc(r.status)} · ${esc(r.scenario)}</div></div>`).join('');
+
+renderRequests();
+renderLtc();
+
+invTable.innerHTML=s.inventory.map((x,i)=>`<tr><td>${esc(x[0])}</td><td>${esc(x[1])}</td><td>${Number(x[2])||0}</td><td>${Number(x[3])||0}</td><td><b>${(Number(x[2])||0)-(Number(x[3])||0)}</b></td><td><span class="status ${String(x[4]).toUpperCase()==='PASS'?'good':'warn'}">${esc(x[4]||'-')}</span></td><td><button class="btn secondary" onclick="editInventoryItem(${i})">수정</button></td></tr>`).join('');
+qTable.innerHTML=s.quality.map(q=>`<tr><td class="trace clicktrace" onclick="focusLtc('${esc(q.draft)}')">${esc(q.draft)}</td><td>${q.type}</td><td>${q.prod}</td><td><span class="status ${statusClass(q.status)}">${q.status}</span></td></tr>`).join('');
+ncList.innerHTML=s.nc.length?s.nc.map(n=>`<div class="log"><b>${esc(n.prod)} · ${n.qty}ea</b><div class="small">기안 <span class="trace clicktrace" 
