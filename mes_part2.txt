@@ -1,0 +1,113 @@
+<input id="rProject" placeholder="DEMO 고객 / C-Band PKG"></div>
+</div>
+<div class="toolbar" style="margin-top:12px"><button class="btn primary" onclick="addRequest()">작업요청 접수 + LTC 생성</button><button class="btn secondary" onclick="clearReq()">초기화</button></div>
+</div>
+</section>
+
+<section class="view" id="reqs"><div class="card"><div class="head"><h2>작업요청 현황</h2><input class="search" id="reqSearch" placeholder="기안번호·고객문서·제품 검색" oninput="renderRequests()"></div><div style="overflow:auto"><table><thead><tr><th>비즈메카 기안번호</th><th>고객사 문서번호</th><th>제품</th><th>수량</th><th>납기</th><th>진척현황</th><th>상태</th></tr></thead><tbody id="reqTable"></tbody></table></div></div></section>
+
+
+<section class="view" id="qreq">
+  <div class="notice">생산 작업요청과 동일하게 PDF 파일을 선택하여 내용을 인식합니다. 수입검사 / 출하검사를 판별하고 비즈메카 기안번호를 중심 추적키로 연결합니다.</div>
+  <div class="row2">
+    <div class="card">
+      <div class="head">
+        <h2>품질 검사 요청 등록</h2>
+        <div class="filepick">
+          <input id="qPdfFileInput" type="file" accept="application/pdf,.pdf" style="display:none" onchange="loadQualityPdf(this)">
+          <button class="btn secondary" onclick="qPdfFileInput.click()">검사요청 PDF 불러오기</button>
+          <span id="qPdfFileName" class="file-name">선택된 파일 없음</span>
+        </div>
+      </div>
+      <div id="qOcrInfo" class="ocrbox">PDF 선택 대기 · OCR 인식 결과는 브라우저 내부에서만 처리됩니다.</div>
+      <div class="form">
+        <div class="field"><label>비즈메카 기안번호 · 중심 추적키</label><input id="qDraft" placeholder="20260825-0013"></div>
+        <div class="field"><label>검사 구분</label><select id="qType"><option>출하검사</option><option>수입검사</option></select></div>
+        <div class="field"><label>고객사 문서번호 / PO</label><input id="qCust" placeholder="DEMO-PO-001"></div>
+        <div class="field"><label>제품 / 품번</label><input id="qProd" placeholder="WPM-DEMO-A"></div>
+        <div class="field"><label>검사 수량</label><input id="qQty" type="number" min="1" value="1"></div>
+        <div class="field"><label>요청일</label><input id="qDate" type="date"></div>
+        <div class="field span3"><label>요청사항 / 비고</label><input id="qRemark" placeholder="필요시 입력"></div>
+      </div>
+      <div class="toolbar" style="margin-top:12px">
+        <button class="btn primary" onclick="addQualityRequest()">품질 검사 요청 등록</button>
+        <button class="btn secondary" onclick="clearQualityRequest()">초기화</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="head"><h2>품질 검사 요청 현황</h2><span class="status good">기안번호 연계</span></div>
+      <div id="qualityRequestList"></div>
+    </div>
+  </div>
+</section>
+
+<section class="view" id="ltc"><div class="card"><div class="head"><h2>디지털 LOT TRAVELLER CARD</h2><span class="status good">자유 Routing</span></div><div class="notice">공정 순서를 강제하지 않습니다. 실제 수행한 공정이 시간순으로 누적됩니다.</div><div id="ltcList"></div></div></section>
+
+<section class="view" id="test">
+<div class="card"><div class="head"><h2>① LTC 식별 · QR/바코드 TEST</h2><span class="status">스캐너 = 키보드 입력 가정</span></div><div class="toolbar"><input class="search" style="flex:1" id="scan" placeholder="LTC 번호 또는 비즈메카 기안번호"><button class="btn primary" onclick="lookup()">조회</button><button class="btn secondary" onclick="sampleScan()">샘플 호출</button></div><div id="scanInfo" class="small">스캔 대기</div></div>
+<div class="row2"><div class="card"><div class="head"><h2>② 작업 실적 입력</h2><span class="status good">다음 공정 강제 없음</span></div><div id="testForm"><div class="small">먼저 LTC를 조회하십시오.</div></div></div><div class="card"><div class="head"><h2>TEST 작업 이력</h2><button class="btn danger" onclick="clearLogs()">TEST 이력 삭제</button></div><div id="testLogs"></div></div></div>
+</section>
+
+<section class="view" id="inv">
+<div class="notice">비즈메카에서 내려받은 재고 Excel / CSV 파일을 불러와 현재 데모 재고표에 반영할 수 있습니다. 파일은 브라우저에서만 읽고 외부 서버로 업로드하지 않습니다.</div>
+<div class="card">
+  <div class="head"><h2>재고 / 예약 현황</h2><div class="toolbar" style="margin:0"><input id="bizInvFile" type="file" accept=".xlsx,.xls,.csv,text/csv" hidden onchange="loadBizmekaInventory(this)"><button class="btn secondary" onclick="bizInvFile.click()">비즈메카 재고 불러오기</button><button class="btn primary" onclick="addInventoryItem()">재고 항목 추가</button></div></div>
+  <div id="bizInvInfo" class="small" style="margin-bottom:10px">비즈메카 파일 선택 대기</div>
+  <div style="overflow:auto"><table><thead><tr><th>품목코드</th><th>품목명</th><th>현재고</th><th>예약</th><th>가용</th><th>수입검사</th><th>관리</th></tr></thead><tbody id="invTable"></tbody></table></div>
+</div>
+</section>
+
+<section class="view" id="quality"><div class="row2">
+<div class="card"><div class="head"><h2>품질검사 현황</h2><button class="btn primary" onclick="addQuality()">DEMO 검사 생성</button></div><table><thead><tr><th>기안번호</th><th>구분</th><th>제품</th><th>상태</th></tr></thead><tbody id="qTable"></tbody></table></div>
+<div class="card"><div class="head"><h2>부적합 현황</h2><button class="btn secondary" onclick="addNc()">DEMO 부적합 추가</button></div><div id="ncList"></div></div>
+</div></section>
+
+<div class="footer">WAVE MES v15 WEB DEMO · 시연/UI 검증 전용 · 외부 DB 없음</div>
+</main></div>
+
+<script>
+const K='wave_mes_v15_demo10_inventory_20260826';
+const routes=['Plasma (PKG/PCB)','Die Attach','Epoxy Attach','Oven Cure','3D Scan','Plasma','Wire Bonding','Wire Pull Test','Inspection','LID Attach','Leak Test','CSAM','Impedance Measure','Laser Marking','HTRB','RF Test','OQC','Packing'];
+
+const base={
+requests:[
+{id:'R1',draft:'20260825-0001',cust:'DEMO-PO-001',prod:'WPM-DEMO-A01',qty:120,due:'2026-09-04',project:'DEMO A / C-Band PKG',status:'접수완료',scenario:'LTC 발행 전'},
+{id:'R2',draft:'20260825-0002',cust:'DEMO-PO-002',prod:'WPM-DEMO-B02',qty:80,due:'2026-09-02',project:'DEMO B / RF PKG',status:'진행중',scenario:'Wire Bonding 진행'},
+{id:'R3',draft:'20260825-0003',cust:'DEMO-PO-003',prod:'WPM-DEMO-C03',qty:50,due:'2026-08-29',project:'DEMO C / MMIC PKG',status:'검사중',scenario:'출하검사 진행'},
+{id:'R4',draft:'20260825-0004',cust:'DEMO-PO-004',prod:'WPM-DEMO-D04',qty:60,due:'2026-09-01',project:'DEMO D / GaAs PKG',status:'부적합',scenario:'공정불량 발생'},
+{id:'R5',draft:'20260825-0005',cust:'DEMO-PO-005',prod:'WPM-DEMO-E05',qty:40,due:'2026-08-26',project:'DEMO E / RF Module',status:'출하완료',scenario:'전 공정 완료'}
+],
+ltcs:[
+{id:'L2',no:'LTC-20260825-0002-01',draft:'20260825-0002',cust:'DEMO-PO-002',prod:'WPM-DEMO-B02',qty:80,done:['Plasma (PKG/PCB)','Die Attach','Epoxy Attach','Oven Cure','3D Scan','Plasma']},
+{id:'L3',no:'LTC-20260825-0003-01',draft:'20260825-0003',cust:'DEMO-PO-003',prod:'WPM-DEMO-C03',qty:50,done:['Plasma (PKG/PCB)','Die Attach','Epoxy Attach','Oven Cure','3D Scan','Plasma','Wire Bonding','Wire Pull Test','Inspection','LID Attach','Leak Test','CSAM','Impedance Measure','Laser Marking','HTRB','RF Test']},
+{id:'L4',no:'LTC-20260825-0004-01',draft:'20260825-0004',cust:'DEMO-PO-004',prod:'WPM-DEMO-D04',qty:60,done:['Plasma (PKG/PCB)','Die Attach','Epoxy Attach','Oven Cure','3D Scan']},
+{id:'L5',no:'LTC-20260825-0005-01',draft:'20260825-0005',cust:'DEMO-PO-005',prod:'WPM-DEMO-E05',qty:40,done:[...routes]}
+],
+logs:[
+{id:'LG1',ltcId:'L2',draft:'20260825-0002',cust:'DEMO-PO-002',ltc:'LTC-20260825-0002-01',prod:'WPM-DEMO-B02',process:'Plasma',input:80,good:80,bad:0,worker:'DEMO 작업자 A',remark:'정상 완료',at:'2026. 8. 25. 10:20:00'},
+{id:'LG2',ltcId:'L4',draft:'20260825-0004',cust:'DEMO-PO-004',ltc:'LTC-20260825-0004-01',prod:'WPM-DEMO-D04',process:'3D Scan',input:60,good:58,bad:2,worker:'DEMO 작업자 B',remark:'외관 이상 2ea',at:'2026. 8. 25. 11:05:00'}
+],
+inventory:[
+['MAT-DA-01','Die Attach Material',500,90,'PASS'],
+['PCB-CB-01','C-Band PCB',120,65,'PASS'],
+['WIRE-AU-01','Au Wire',80,30,'PASS'],
+['LID-01','Package LID',55,15,'WAIT'],
+['EPOXY-01','Conductive Epoxy',32,12,'PASS']
+],
+qualityRequests:[
+{id:'QR1',draft:'20260825-0003',type:'출하검사',cust:'DEMO-PO-003',prod:'WPM-DEMO-C03',qty:50,date:'2026-08-25',status:'접수완료',remark:'출하 전 최종검사'},
+{id:'QR2',draft:'20260825-0001',type:'수입검사',cust:'DEMO-PO-001',prod:'WPM-DEMO-A01',qty:120,date:'2026-08-25',status:'접수완료',remark:'입고 자재 검사'}
+],
+quality:[
+{draft:'20260825-0003',type:'출하검사',prod:'WPM-DEMO-C03',status:'검사중'},
+{draft:'20260825-0005',type:'출하검사',prod:'WPM-DEMO-E05',status:'검사완료'},
+{draft:'20260825-0001',type:'수입검사',prod:'WPM-DEMO-A01',status:'검사대기'}
+],
+nc:[
+{draft:'20260825-0004',prod:'WPM-DEMO-D04',qty:2,reason:'3D Scan 외관 이상 → NCR 검토중'}
+]};
+
+function load(){try{return JSON.parse(localStorage.getItem(K))||structuredClone(base)}catch(e){return JSON.parse(JSON.stringify(base))}}
+let s=load();
+function save(){localStorage.setItem(K,JSON.stringify(s));renderAll()}
+function id(){return Math.random().toString(36).slice(2)+Date.now().toSt
