@@ -1,0 +1,84 @@
+ onclick="focusLtc('${esc(n.draft)}')">${esc(n.draft)}</span> ⇢ ${esc(n.reason)}</div></div>`).join(''):'<div class="small">등록된 DEMO 부적합이 없습니다.</div>';
+renderQualityRequests();
+renderLogs()
+}
+function renderLtc(){
+  if(!ltcList)return;
+  ltcList.innerHTML=s.ltcs.map(l=>{
+    let pct=Math.round(l.done.length/routes.length*100);
+    const open=expandedLtcDraft===l.draft;
+    return`<div class="card" id="ltc-${esc(l.draft)}" style="box-shadow:none"><div class="head"><div><b class="trace clicktrace" onclick="toggleLtc('${esc(l.draft)}')">${esc(l.draft)}</b><div class="small">${esc(l.no)} · 고객문서 ${esc(l.cust)} · ${esc(l.prod)} · ${l.qty}ea</div></div><span class="status ${pct===100?'good':'warn'}">${l.done.length}/${routes.length} · ${pct}%</span></div><div class="progress"><i style="width:${pct}%"></i></div><div class="small" style="margin-top:7px">기안번호를 누르면 공정별 현황을 ${open?'접습니다':'펼칩니다'}.</div><div class="ltc-detail ${open?'open':''}"><div class="processes">${routes.map(p=>`<button class="${l.done.includes(p)?'done':''}">${l.done.includes(p)?'✓ ':''}${p}</button>`).join('')}</div></div></div>`
+  }).join('');
+}
+function renderRequests(){
+  let q=(reqSearch?.value||'').toLowerCase();
+  reqTable.innerHTML=s.requests.filter(r=>[r.draft,r.cust,r.prod,r.status].some(v=>String(v).toLowerCase().includes(q))).map(r=>{
+    const pct=progressFor(r);
+    return`<tr><td class="trace clicktrace" onclick="focusLtc('${esc(r.draft)}')">${esc(r.draft)}</td><td>${esc(r.cust)}</td><td>${esc(r.prod)}</td><td>${r.qty}</td><td>${r.due||'-'}</td><td class="progress-cell"><b>${pct}%</b><div class="mini-progress"><i style="width:${pct}%"></i></div></td><td><span class="status ${statusClass(r.status)}">${r.status}</span></td></tr>`
+  }).join('')
+}
+function fillPdfDemo(){rDraft.value='20260825-0012';rCust.value='CUST-PO-DEMO-0825';rProd.value='WPM-CB-DEMO';rQty.value=50;rProject.value='DEMO 고객 / C-Band MMIC PKG';let d=new Date();d.setDate(d.getDate()+14);rDue.value=d.toISOString().slice(0,10)}
+function clearReq(){['rDraft','rCust','rProd','rDue','rProject'].forEach(x=>document.getElementById(x).value='');rQty.value=100}
+function addRequest(){let draft=rDraft.value.trim(),cust=rCust.value.trim(),prod=rProd.value.trim(),qty=Number(rQty.value)||0;if(!draft||!prod||qty<=0){
+  const miss=[]; if(!draft)miss.push('기안번호'); if(!prod)miss.push('제품/품번'); if(qty<=0)miss.push('수량');
+  return alert('필수 항목 미입력: '+miss.join(', ')+'\nOCR 미인식 항목만 확인해서 입력해 주세요.');
+}if(s.requests.some(r=>r.draft===draft))return alert('이미 등록된 비즈메카 기안번호입니다.');let rid=id();s.requests.push({id:rid,draft,cust,prod,qty,due:rDue.value,project:rProject.value,status:'접수완료',scenario:'사용자 DEMO 등록'});s.ltcs.push({id:id(),no:`LTC-${draft}-01`,draft,cust,prod,qty,done:[]});save();show('reqs');clearReq()}
+let selected=null;
+function lookup(){let q=scan.value.trim().toLowerCase();selected=s.ltcs.find(l=>[l.no,l.draft,l.cust].some(v=>String(v).toLowerCase()===q))||s.ltcs.find(l=>[l.no,l.draft,l.cust].some(v=>String(v).toLowerCase().includes(q)));renderTest()}
+function sampleScan(){let l=s.ltcs.find(x=>x.id==='L2')||s.ltcs[0];if(!l)return;scan.value=l.no;lookup()}
+function renderTest(){if(!selected){scanInfo.textContent='일치하는 LTC를 찾지 못했습니다.';testForm.innerHTML='<div class="small">LTC 조회 후 입력할 수 있습니다.</div>';return}scanInfo.innerHTML=`호출완료 · <b>${esc(selected.no)}</b> · 기안 <b>${esc(selected.draft)}</b> · 고객문서 ${esc(selected.cust)}`;let suggested=selected.qty;let last=s.logs.find(x=>x.ltcId===selected.id);if(last)suggested=last.good;testForm.innerHTML=`<div class="form"><div class="field"><label>공정 선택</label><select id="tp">${routes.map(p=>`<option>${p}</option>`).join('')}</select></div><div class="field"><label>작업자</label><input id="tw" value="DEMO 작업자"></div><div class="field"><label>작업일시</label><input value="${new Date().toLocaleString('ko-KR')}" disabled></div><div class="field"><label>투입수량</label><input id="ti" type="number" value="${suggested}"></div><div class="field"><label>양품수량</label><input id="tg" type="number" value="${suggested}"></div><div class="field"><label>불량수량</label><input id="tb" type="number" value="0"></div><div class="field span3"><label>비고</label><input id="tr" placeholder="선택 입력"></div></div><div class="toolbar" style="margin-top:12px"><button class="btn primary" onclick="saveTest()">작업 완료 등록</button></div><div class="processes">${routes.map((p,i)=>`<button onclick="document.getElementById('tp').selectedIndex=${i}">${p}</button>`).join('')}</div>`}
+function saveTest(){let input=Number(ti.value),good=Number(tg.value),bad=Number(tb.value);if(good+bad!==input)return alert('양품 + 불량 = 투입수량이어야 합니다.');let p=tp.value;s.logs.unshift({id:id(),ltcId:selected.id,draft:selected.draft,cust:selected.cust,ltc:selected.no,prod:selected.prod,process:p,input,good,bad,worker:tw.value,remark:tr.value,at:new Date().toLocaleString('ko-KR')});if(!selected.done.includes(p))selected.done.push(p);save();renderTest()}
+function renderLogs(){testLogs.innerHTML=s.logs.length?s.logs.map(x=>`<div class="log"><b>${esc(x.process)}</b> · 투입 ${x.input} / 양품 ${x.good} / 불량 ${x.bad}<div class="small">${esc(x.at)} · ${esc(x.worker)} · 기안 ${esc(x.draft)} · ${esc(x.ltc)} ${x.remark?'· '+esc(x.remark):''}</div></div>`).join(''):'<div class="small">등록된 TEST 이력이 없습니다.</div>'}
+function clearLogs(){if(confirm('TEST 이력을 삭제하시겠습니까?')){s.logs=[];save()}}
+function addQuality(){let r=s.requests[s.requests.length-1];if(!r)return;s.quality.unshift({draft:r.draft,type:'출하검사',prod:r.prod,status:'검사대기'});save()}
+function addNc(){let r=s.requests[s.requests.length-1];if(!r)return;s.nc.unshift({draft:r.draft,prod:r.prod,qty:1,reason:'DEMO 외관 부적합'});save()}
+
+async function ensureXlsxLib(){
+  if(window.XLSX)return;
+  await new Promise((resolve,reject)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';sc.onload=resolve;sc.onerror=reject;document.head.appendChild(sc)});
+}
+function pickInvValue(row,names){
+  const keys=Object.keys(row||{}); const norm=s=>String(s||'').replace(/\s/g,'').toLowerCase();
+  for(const name of names){const k=keys.find(k=>norm(k)===norm(name)||norm(k).includes(norm(name)));if(k!=null&&row[k]!==''&&row[k]!=null)return row[k]}
+  return '';
+}
+async function loadBizmekaInventory(input){
+  const f=input.files&&input.files[0]; if(!f)return;
+  const info=document.getElementById('bizInvInfo'); info.textContent='비즈메카 재고 파일 읽는 중...';
+  try{
+    await ensureXlsxLib();
+    const data=await f.arrayBuffer(); const wb=XLSX.read(data,{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+    const mapped=rows.map(r=>{
+      const code=pickInvValue(r,['품목코드','품목번호','자재코드','Item Code','Code']);
+      const name=pickInvValue(r,['품목명','자재명','제품명','Item Name','Name']);
+      const stock=Number(String(pickInvValue(r,['현재고','재고수량','현재재고','재고','Stock','On Hand'])).replace(/,/g,''))||0;
+      const reserved=Number(String(pickInvValue(r,['예약','예약수량','할당수량','Reserved'])).replace(/,/g,''))||0;
+      const incoming=String(pickInvValue(r,['수입검사','검사상태','수입검사상태','Inspection'])||'PASS').trim();
+      return [String(code).trim(),String(name).trim(),stock,reserved,incoming];
+    }).filter(x=>x[0]||x[1]);
+    if(!mapped.length)throw new Error('품목코드/품목명 열을 찾지 못했습니다.');
+    s.inventory=mapped; save(); info.textContent=`불러오기 완료 / ${f.name} / ${mapped.length}개 품목`;
+  }catch(e){info.textContent='불러오기 실패 / '+(e.message||e); alert('비즈메카 재고 파일을 확인해 주세요.\n품목코드, 품목명, 현재고(또는 재고수량) 열이 필요합니다.');}
+  finally{input.value='';}
+}
+function editInventoryItem(i){
+  const x=s.inventory[i]; if(!x)return;
+  const code=prompt('품목코드',x[0]); if(code===null)return;
+  const name=prompt('품목명',x[1]); if(name===null)return;
+  const stock=prompt('현재고',x[2]); if(stock===null)return;
+  const reserved=prompt('예약수량',x[3]); if(reserved===null)return;
+  const inspection=prompt('수입검사 상태 (PASS / WAIT 등)',x[4]); if(inspection===null)return;
+  s.inventory[i]=[code.trim(),name.trim(),Number(stock)||0,Number(reserved)||0,inspection.trim()||'-']; save();
+}
+function addInventoryItem(){
+  const code=prompt('신규 품목코드'); if(!code)return;
+  const name=prompt('품목명'); if(name===null)return;
+  const stock=prompt('현재고','0'); if(stock===null)return;
+  const reserved=prompt('예약수량','0'); if(reserved===null)return;
+  const inspection=prompt('수입검사 상태','PASS'); if(inspection===null)return;
+  s.inventory.push([code.trim(),name.trim(),Number(stock)||0,Number(reserved)||0,inspection.trim()||'PASS']); save();
+}
+renderAll();
+</script>
+</body></html>
