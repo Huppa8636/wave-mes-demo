@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WAVE MES v15 WEB DEMO</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,'Noto Sans KR',sans-serif;background:#f4f7fb;color:#182033}button,input,select{font:inherit}.app{display:grid;grid-template-columns:235px 1fr;min-height:100vh}.side{background:#122038;color:white;padding:18px;position:sticky;top:0;height:100vh}.brand{font-size:18px;font-weight:900;margin-bottom:18px}.brand small{display:block;font-size:10px;color:#9fb0c9;margin-top:4px}.nav button{width:100%;border:0;background:transparent;color:#afbdd2;text-align:left;padding:10px 12px;margin:2px 0;border-radius:8px;cursor:pointer}.nav button.active,.nav button:hover{background:#253b5d;color:white}.safe{font-size:10px;color:#8fa1bb;border-top:1px solid #2a3a52;margin-top:16px;padding-top:13px;line-height:1.5}main{padding:24px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.top h1{margin:0;font-size:22px}.top p{margin:5px 0 0;color:#6d788b;font-size:11px}.badge{padding:7px 10px;border-radius:14px;background:#eaf1ff;color:#245edb;font-size:10px;font-weight:800}.view{display:none}.view.active{display:block}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}.card,.metric{background:#fff;border:1px solid #dce4ee;border-radius:12px;box-shadow:0 3px 12px #1b2d4610}.metric{padding:15px}.metric span{font-size:10px;color:#6f7b8e}.metric b{display:block;font-size:24px;margin-top:7px}.card{padding:16px;margin-bottom:14px}.head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.head h2{margin:0;font-size:14px}.toolbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}.btn{border:0;border-radius:8px;padding:8px 11px;font-size:10px;font-weight:800;cursor:pointer}.primary{background:#245edb;color:white}.secondary{background:white;border:1px solid #d8e0ea}.danger{background:#fff0f1;color:#ad2633;border:1px solid #f0c3c7}.status{display:inline-block;padding:4px 8px;border-radius:12px;font-size:9px;font-weight:800;background:#eef2f7;color:#5f6c80}.status.good{background:#e5f7ef;color:#087c51}.status.warn{background:#fff1d7;color:#946000}.status.bad{background:#ffe8ea;color:#b22936}.form{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.field label{display:block;font-size:9px;color:#6d788b;margin-bottom:4px}.field input,.field select{width:100%;padding:9px;border:1px solid #dce4ee;border-radius:7px;background:white;font-size:10px}.span3{grid-column:1/-1}table{width:100%;border-collapse:collapse;font-size:10px}th,td{padding:9px;border-bottom:1px solid #edf1f5;text-align:left}th{background:#f7f9fc;color:#68758a}.trace{font-weight:900;color:#245edb}.processes{display:flex;flex-wrap:wrap;gap:6px}.processes button{padding:7px 9px;border:1px solid #dce4ee;background:white;border-radius:15px;font-size:9px;cursor:pointer}.processes button.done{background:#e5f7ef;color:#087c51}.log{border-left:3px solid #245edb;padding:8px 10px;margin:7px 0;background:#f8fafc;font-size:10px}.small{font-size:9px;color:#6d788b}.notice{padding:11px 13px;background:#edf3ff;color:#2452ad;border:1px solid #cfdcff;border-radius:8px;font-size:10px;margin-bottom:12px}.progress{height:8px;background:#edf1f5;border-radius:10px;overflow:hidden}.progress i{display:block;height:100%;background:#245edb}.row2{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}.search{padding:8px 10px;border:1px solid #dce4ee;border-radius:8px;min-width:220px}.footer{margin-top:20px;text-align:center;color:#7a8493;font-size:9px}.scenario{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}.scenario .card{padding:12px;margin:0}.scenario b{font-size:11px}.scenario span{display:block;font-size:9px;color:#6d788b;margin-top:5px}@media(max-width:900px){.app{grid-template-columns:1fr}.side{height:auto;position:relative}.nav{display:flex;overflow:auto}.nav button{min-width:max-content}.grid4,.scenario{grid-template-columns:1fr 1fr}.row2{grid-template-columns:1fr}.form{grid-template-columns:1fr 1fr}}@media(max-width:600px){main{padding:14px}.grid4,.scenario,.form{grid-template-columns:1fr}.span3{grid-column:auto}}
+
+.due-list{display:grid;gap:8px}.due-item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid #e1e7ef;border-radius:9px;background:#fff}.due-item b{font-size:10px}.due-item .small{margin-top:3px}.risk-red{color:#b22936;background:#ffe8ea}.risk-orange{color:#946000;background:#fff1d7}.risk-green{color:#087c51;background:#e5f7ef}.clicktrace{cursor:pointer;text-decoration:underline;text-underline-offset:2px}.progress-cell{min-width:150px}.mini-progress{height:7px;background:#edf1f5;border-radius:10px;overflow:hidden;margin-top:5px}.mini-progress i{display:block;height:100%;background:#245edb}.ltc-detail{display:none;margin-top:10px}.ltc-detail.open{display:block}.filepick{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.file-name{font-size:10px;color:#5d6a7c}
+
+.ocrbox{padding:10px 12px;border:1px dashed #bac8dc;border-radius:9px;background:#fafcff;margin:10px 0;font-size:9px;color:#617086}
+.ocrbox b{color:#245edb}.ocr-progress{height:6px;background:#e8edf4;border-radius:8px;overflow:hidden;margin-top:7px}.ocr-progress i{display:block;height:100%;background:#245edb;transition:width .2s}
+.qreq-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.qreq-item{padding:12px;border:1px solid #dce4ee;border-radius:10px;background:#fff}
+@media(max-width:700px){.qreq-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side">
+<div class="brand">WAVE ERP·MES<small>v15 WEB DEMO · 작업요청서 전용 OCR</small></div>
+<div class="nav" id="nav">
+<button class="active" data-v="dash">▣ 통합현황</button>
+<button data-v="req">＋ 작업요청</button>
+<button data-v="reqs">▧ 작업요청 현황</button>
+<button data-v="qreq">☑ 품질 검사 요청</button>
+<button data-v="ltc">▤ 디지털 LTC</button>
+<button data-v="test">⌾ 현장 LTC TEST</button>
+<button data-v="inv">◇ 재고 / 예약</button>
+<button data-v="quality">✓ 품질 / 부적합</button>
+</div>
+<div class="safe">● WEB DEMO<br>실제 고객·도면·생산자료 입력 금지<br>입력값은 해당 브라우저 localStorage에만 저장됩니다.</div>
+</aside>
+<main>
+<header class="top"><div><h1 id="title">전사 업무 통합현황</h1><p id="sub">비즈메카 최초 기안번호를 중심으로 작업·LTC·품질 이력을 연결합니다.</p></div><span class="badge">시연용 더미 데이터 5건</span></header>
+
+<section class="view active" id="dash">
+<div class="grid4">
+<div class="metric"><span>접수 작업요청</span><b id="mReq">0</b></div>
+<div class="metric"><span>진행 LTC</span><b id="mLtc">0</b></div>
+<div class="metric"><span>금일 TEST 실적</span><b id="mTest">0</b></div>
+<div class="metric"><span>부적합 건</span><b id="mNc">0</b></div>
+</div>
+<div class="card"><div class="head"><h2>납기 리스크 · 임박 PO</h2><span class="status warn">D-Day 기준</span></div><div id="dueRisk" class="due-list"></div></div><div class="scenario" id="scenarioCards"></div>
+<div class="row2">
+<div class="card"><div class="head"><h2>최근 작업요청</h2><span class="status good">기안번호 중심 추적</span></div><div id="dashReq"></div></div>
+<div class="card"><div class="head"><h2>추적 구조</h2></div><div class="notice"><b>중심 추적키</b><br>비즈메카 최초 기안번호<br><br><b>참조정보</b><br>고객사 문서번호 / PO</div><div class="small">기안번호 → 작업요청 → LTC → 현장실적 → 품질검사 → 부적합 → 출하 흐름으로 연결합니다.</div></div>
+</div>
+</section>
+
+<section class="view" id="req">
+<div class="notice">생산 작업요청에서는 <b>작업요청서</b> 양식만 접수합니다. 다른 양식은 자동 차단합니다. 스캔 PDF는 OCR로 인식하고, 표준 작업요청서의 문서번호·발주서번호·제품명·QTY·완료요청일을 우선 매핑합니다.</div>
+<div class="card"><div class="head"><h2>생산 작업요청 등록</h2><div class="filepick"><input id="pdfFileInput" type="file" accept="application/pdf,.pdf" style="display:none" onchange="loadPdfFile(this)"><button class="btn secondary" onclick="pdfFileInput.click()">PDF 파일 불러오기</button><span id="pdfFileName" class="file-name">선택된 파일 없음</span></div></div>
+<div id="pdfLoadInfo" class="small" style="margin-bottom:10px">PDF 선택 대기 · 텍스트형 PDF는 즉시 추출, 이미지형 PDF는 OCR 처리</div><div class="form">
+<div class="field"><label>비즈메카 기안번호 · 중심 추적키</label><input id="rDraft" placeholder="20260825-0012"></div>
+<div class="field"><label>고객사 문서번호 / PO · 참조</label><input id="rCust" placeholder="CUST-PO-001"></div>
+<div class="field"><label>제품 / 품번</label><input id="rProd" placeholder="WPM-DEMO-A"></div>
+<div class="field"><label>요청수량</label><input id="rQty" type="number" value="100"></div>
+<div class="field"><label>납기</label><input id="rDue" type="date"></div>
+<div class="field"><label>고객 / 프로젝트</label>
