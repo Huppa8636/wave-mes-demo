@@ -1,4 +1,5 @@
 // Resync fixed-route UI and save target from actual LTC/log state.
+// v2: event-driven only. Do NOT poll/rewrite the form every second because it causes visible flicker and duplicated notices.
 (function(){
   const FIXED=['Plasma (PKG/PCB)','Die Attach','Epoxy Attach','Oven Cure','3D Scan','Plasma','Wire Bonding','Wire Pull Test','Inspection'];
   function clean(v){return String(v||'').replace(/^✓\s*/,'').replace(/\s*←\s*(현재|기본)$/,'').trim();}
@@ -16,7 +17,9 @@
       sel.value=next; sel.disabled=true;
     }
     const form=document.getElementById('testForm');
-    const notice=form?.querySelector('.notice');
+    const notices=form?[...form.querySelectorAll('.notice')]:[];
+    // Only update the main process notice. Never create a second notice.
+    const notice=notices.find(n=>/고정공정|현재 입력 공정 자동 선택|제조공정 선택 가능 구간|OQC 품질검사 완료/.test(n.textContent||''))||notices[0];
     if(notice){const d=done(selected);notice.innerHTML=`<b>고정공정 자동 선택: ${next}</b><br>고정공정 ${FIXED.filter(p=>d.has(p)).length}/${FIXED.length} 완료 · 완료 등록 후 다음 공정으로 자동 전환됩니다.`;}
     const pw=form?.querySelector('.processes');
     if(pw){const d=done(selected);pw.innerHTML=FIXED.map(p=>`<button class="${d.has(p)?'done':''}" disabled>${d.has(p)?'✓ ':''}${p}${p===next?' ← 현재':''}</button>`).join('');}
@@ -33,13 +36,19 @@
     const before=(s.logs||[]).length;
     const r=typeof oldSave==='function'?oldSave.apply(this,arguments):undefined;
     setTimeout(()=>{
-      // If save succeeded, force a fresh render from persisted state so the just-completed process cannot remain selected.
       if((s.logs||[]).length>before){try{window.renderTest();}catch(e){sync();}}
       else sync();
     },80);
     return r;
   };
-  document.addEventListener('click',e=>{if(e.target?.closest?.('#test'))setTimeout(sync,80);});
-  setInterval(()=>{if(document.getElementById('test')?.classList.contains('active'))sync();},1000);
+
+  // Sync only on meaningful user/navigation events. No timer polling.
+  const oldLookup=window.lookup;
+  if(typeof oldLookup==='function'){
+    window.lookup=function(){const r=oldLookup.apply(this,arguments);setTimeout(sync,100);return r;};
+  }
+  document.addEventListener('click',e=>{
+    if(e.target?.closest?.('#nav [data-v="test"]'))setTimeout(sync,120);
+  });
   setTimeout(sync,300);
 })();
