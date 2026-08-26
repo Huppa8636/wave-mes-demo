@@ -1,12 +1,13 @@
-// USB QR/Barcode scanner support: LTC___<draft> + Enter -> Field LTC lookup
+// USB QR/Barcode scanner support: accepts LTC___<draft> and URL...LTC___<draft> + Enter
 (function(){
   let buf='';
   let last=0;
-  const RESET_MS=180;
+  const RESET_MS=250;
 
   function extract(raw){
     const s=String(raw||'').trim();
-    const m=s.match(/(?:^|[^A-Za-z0-9])LTC___([A-Za-z0-9_.\/-]+)/i) || s.match(/^LTC___([A-Za-z0-9_.\/-]+)$/i);
+    // Accept plain LTC___CODE or any scanned URL/text containing LTC___CODE.
+    const m=s.match(/LTC___([A-Za-z0-9_.\/-]+)/i);
     if(m)return m[1].trim();
     return '';
   }
@@ -19,11 +20,16 @@
     try{window.show('test');}catch(e){}
     scan.value=code;
     window.lookup();
-    try{window.scrollTo({top:0,left:0,behavior:'auto'})}catch(e){window.scrollTo(0,0)}
+    // Some legacy handlers can return to dashboard after Enter; force Field LTC after lookup settles.
+    setTimeout(function(){
+      try{window.show('test');}catch(e){}
+      const s=document.getElementById('scan');
+      if(s)s.value=code;
+      try{window.scrollTo({top:0,left:0,behavior:'auto'})}catch(e){window.scrollTo(0,0)}
+    },80);
     return true;
   }
 
-  // Global scanner capture. Most USB scanners behave like a keyboard and append Enter.
   document.addEventListener('keydown',function(e){
     const now=Date.now();
     if(now-last>RESET_MS)buf='';
@@ -33,7 +39,7 @@
       const code=extract(buf);
       if(code){
         e.preventDefault();
-        e.stopPropagation();
+        e.stopImmediatePropagation();
         go(code);
       }
       buf='';
@@ -42,11 +48,10 @@
 
     if(e.key && e.key.length===1){
       buf+=e.key;
-      if(buf.length>120)buf=buf.slice(-120);
+      if(buf.length>300)buf=buf.slice(-300);
     }
   },true);
 
-  // Also support pasting/scanning the code directly into the LTC scan box.
   document.addEventListener('keydown',function(e){
     if(e.key!=='Enter')return;
     const el=e.target;
@@ -54,9 +59,8 @@
     const code=extract(el.value);
     if(code){
       e.preventDefault();
-      e.stopPropagation();
-      el.value=code;
-      if(typeof window.lookup==='function')window.lookup();
+      e.stopImmediatePropagation();
+      go(code);
     }
   },true);
 })();
