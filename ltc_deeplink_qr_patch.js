@@ -1,46 +1,61 @@
 // WAVEPIA MES - QR / URL deep link to Field LTC
 (function(){
   const LOGIN_KEY='wave_mes_demo_login_v2';
-  let handled=false, tries=0;
+  let tries=0, finished=false;
 
   function getTarget(){
     try{
       const u=new URL(location.href);
       const q=(u.searchParams.get('ltc')||'').trim();
       if(q)return q;
-      // Legacy QR support: ...___20260826-0001
       const raw=decodeURIComponent(location.href);
-      const m=raw.match(/___\s*([A-Za-z0-9_.\/-]+)/);
+      const m=raw.match(/(?:LTC)?___\s*([A-Za-z0-9_.\/-]+)/i);
       return m?m[1].trim():'';
     }catch(e){return ''}
   }
   const target=getTarget();
   if(!target)return;
 
-  function session(){try{return JSON.parse(sessionStorage.getItem(LOGIN_KEY)||'null')}catch(e){return null}}
+  // Other startup/role patches must not redirect a QR deep-link back to dashboard.
+  window.waveMesDeepLinkActive=true;
+  window.waveMesDeepLinkTarget=target;
 
-  function openLtc(){
-    if(handled)return true;
+  function session(){try{return JSON.parse(sessionStorage.getItem(LOGIN_KEY)||'null')}catch(e){return null}}
+  function fieldVisible(){const v=document.getElementById('test');return !!v && getComputedStyle(v).display!=='none'}
+  function ensureFieldLtc(){
+    if(finished)return true;
     tries++;
-    // 로그인 전이면 로그인 화면을 그대로 보여주고 로그인 완료까지 기다린다.
     if(!session())return false;
     if(typeof window.show!=='function'||typeof window.lookup!=='function')return false;
     const input=document.getElementById('scan');
     const view=document.getElementById('test');
     if(!input||!view)return false;
 
-    // 역할상 현장 LTC 메뉴 접근이 차단된 경우 임의 우회하지 않는다.
     const nav=document.querySelector('#nav [data-v="test"]');
-    if(nav && nav.style.display==='none'){
-      handled=true;
+    if(nav && getComputedStyle(nav).display==='none'){
+      finished=true;
       alert('현재 로그인 계정에는 현장 LTC 입력 권한이 없습니다.\n생산 / 품질 / 관리자 계정으로 로그인해 주세요.');
       return true;
     }
 
-    handled=true;
+    // Force the actual Field LTC category first, then inject LOT and execute the same lookup as the 조회 button.
     window.show('test');
     input.value=target;
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    input.dispatchEvent(new Event('change',{bubbles:true}));
     window.lookup();
+
+    // Some startup patches render dashboard after this script. Reassert Field LTC a few times,
+    // but do NOT re-run lookup after the first successful population.
+    let n=0;
+    const hold=setInterval(()=>{
+      n++;
+      if(typeof window.show==='function'&&!fieldVisible())window.show('test');
+      const scan=document.getElementById('scan');
+      if(scan && scan.value!==target)scan.value=target;
+      if(n>=12){clearInterval(hold);finished=true;window.waveMesDeepLinkActive=false;}
+    },150);
+
     try{window.scrollTo({top:0,left:0,behavior:'auto'})}catch(e){window.scrollTo(0,0)}
     setTimeout(()=>{
       const info=document.getElementById('scanInfo');
@@ -48,14 +63,13 @@
         alert('QR의 LTC / 중심추적번호를 찾지 못했습니다.\n번호: '+target);
         input.focus();input.select();
       }
-    },120);
+    },500);
     return true;
   }
 
-  // 이미 로그인된 세션이면 즉시, 아니면 로그인 성공 직후 자동 진입.
-  if(!openLtc()){
+  if(!ensureFieldLtc()){
     const timer=setInterval(()=>{
-      if(openLtc()||tries>240)clearInterval(timer);
+      if(ensureFieldLtc()||tries>240)clearInterval(timer);
     },250);
   }
 })();
