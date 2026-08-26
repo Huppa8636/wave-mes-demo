@@ -1,14 +1,18 @@
-// Final LTC stage flow patch: Manufacturing -> OQC -> Packing + 30s anti-rapid-entry cooldown
+// Final LTC stage flow patch v2: fixed early routing -> flexible manufacturing -> OQC -> Packing + 10s test cooldown
 (function(){
-  const PRE_OQC_ROUTES=[
+  // 여기까지는 회사 표준 고정공정: 순서 변경 / 스킵 불가
+  const FIXED_ROUTES=[
     'Plasma (PKG/PCB)','Die Attach','Epoxy Attach','Oven Cure','3D Scan','Plasma',
-    'Wire Bonding','Wire Pull Test','Inspection','LID Attach','Leak Test','CSAM',
-    'Impedance Measure','Laser Marking','HTRB','RF Test'
+    'Wire Bonding','Wire Pull Test','Inspection'
   ];
+  // Inspection 이후 제조공정은 실제 작업 순서가 유동적일 수 있음
+  const FLEX_ROUTES=['LID Attach','Leak Test','CSAM','Impedance Measure','Laser Marking','HTRB','RF Test'];
+  const PRE_OQC_ROUTES=[...FIXED_ROUTES,...FLEX_ROUTES];
   const QUALITY_ROUTE='OQC';
   const PACKING_ROUTE='Packing';
-  const COOLDOWN_MS=30000;
+  const COOLDOWN_MS=10000; // TEST 단계: 10초
   const INSPECTION_LOG_KEY='wave_mes_field_inspection_logs_v1';
+  const COOLDOWN_PREFIX='wave_mes_ltc_cooldown_v2_';
   let timer=null;
 
   function clean(v){return String(v||'').replace(/^✓\s*/,'').replace(/\s*←\s*현재$/,'').trim();}
@@ -21,13 +25,29 @@
   }
   function stage(l){
     const done=doneSet(l);
-    const preRemaining=PRE_OQC_ROUTES.filter(p=>!done.has(p));
-    if(preRemaining.length)return {type:'work',next:preRemaining[0],routes:PRE_OQC_ROUTES,done,remaining:preRemaining};
-    if(!done.has(QUALITY_ROUTE))return {type:'oqc',next:QUALITY_ROUTE,routes:[QUALITY_ROUTE],done,remaining:[QUALITY_ROUTE]};
-    if(!done.has(PACKING_ROUTE))return {type:'packing',next:PACKING_ROUTE,routes:[PACKING_ROUTE],done,remaining:[PACKING_ROUTE]};
-    return {type:'complete',next:'',routes:[],done,remaining:[]};
+
+    // 1) 고정공정은 반드시 앞에서부터 한 단계씩만 진행
+    const fixedNext=FIXED_ROUTES.find(p=>!done.has(p));
+    if(fixedNext){
+      return {type:'work',mode:'fixed',next:fixedNext,allowed:[fixedNext],done,
+        remaining:FIXED_ROUTES.filter(p=>!done.has(p))};
+    }
+
+    // 2) Inspection 이후는 남은 제조공정 중 작업자가 실제 수행 공정을 선택 가능
+    const flexRemaining=FLEX_ROUTES.filter(p=>!done.has(p));
+    if(flexRemaining.length){
+      return {type:'work',mode:'flex',next:flexRemaining[0],allowed:flexRemaining,done,remaining:flexRemaining};
+    }
+
+    // 3) 모든 제조공정 완료 후 OQC
+    if(!done.has(QUALITY_ROUTE))return {type:'oqc',mode:'quality',next:QUALITY_ROUTE,allowed:[QUALITY_ROUTE],done,remaining:[QUALITY_ROUTE]};
+
+    // 4) OQC 완료 후 Packing
+    if(!done.has(PACKING_ROUTE))return {type:'packing',mode:'packing',next:PACKING_ROUTE,allowed:[PACKING_ROUTE],done,remaining:[PACKING_ROUTE]};
+    return {type:'complete',mode:'complete',next:'',allowed:[],done,remaining:[]};
   }
-  function cooldownKey(){return selected?.draft?'wave_mes_ltc_cooldown_'+selected.draft:'';}
+
+  function cooldownKey(){return selected?.draft?COOLDOWN_PREFIX+selected.draft:'';}
   function cooldownLeft(){
     const k=cooldownKey();if(!k)return 0;
     const until=Number(localStorage.getItem(k)||0);
@@ -36,18 +56,19 @@
   function startCooldown(){const k=cooldownKey();if(k)localStorage.setItem(k,String(Date.now()+COOLDOWN_MS));}
   function workCard(){return document.getElementById('testForm')?.closest('.card')||null;}
   function inspectionSection(){return document.getElementById('inspectionSection');}
+
   function updateCooldownUI(){
     if(typeof selected==='undefined'||!selected)return;
-    const ms=cooldownLeft(), sec=Math.ceil(ms/1000), st=stage(selected);
-    const w=workCard(), q=inspectionSection();
+    const ms=cooldownLeft(),sec=Math.ceil(ms/1000),st=stage(selected);
+    const w=workCard(),q=inspectionSection();
     const wbtn=w?[...w.querySelectorAll('button')].find(b=>/작업 완료 등록|입력 대기/.test(b.textContent)):null;
     const qbtn=q?[...q.querySelectorAll('button')].find(b=>/검사 실적 등록|OQC 검사 완료|입력 대기/.test(b.textContent)):null;
     if(wbtn){
-      if(ms>0){wbtn.disabled=true;wbtn.textContent=`입력 대기 ${sec}초`;wbtn.title='연속 공정 허위 입력 방지를 위한 30초 대기시간입니다.';}
+      if(ms>0){wbtn.disabled=true;wbtn.textContent=`입력 대기 ${sec}초`;wbtn.title='연속 허위 입력 방지를 위한 TEST 10초 대기시간입니다.';}
       else if(st.type==='work'||st.type==='packing'){wbtn.disabled=false;wbtn.textContent='작업 완료 등록';wbtn.title='';}
     }
     if(qbtn){
-      if(ms>0){qbtn.disabled=true;qbtn.textContent=`입력 대기 ${sec}초`;qbtn.title='연속 공정 허위 입력 방지를 위한 30초 대기시간입니다.';}
+      if(ms>0){qbtn.disabled=true;qbtn.textContent=`입력 대기 ${sec}초`;qbtn.title='연속 허위 입력 방지를 위한 TEST 10초 대기시간입니다.';}
       else if(st.type==='oqc'){qbtn.disabled=false;qbtn.textContent='검사 실적 등록';qbtn.title='';}
     }
     let note=document.getElementById('ltcCooldownNotice');
@@ -57,39 +78,50 @@
       note.innerHTML=`<b>연속 입력 방지 대기중</b><br>다음 실적은 ${sec}초 후 등록할 수 있습니다.`;
     }else if(note)note.remove();
   }
-  function scheduleTimer(){
-    if(timer)clearInterval(timer);
-    timer=setInterval(()=>{try{updateCooldownUI();}catch(e){}},250);
-  }
+  function scheduleTimer(){if(timer)clearInterval(timer);timer=setInterval(()=>{try{updateCooldownUI();}catch(e){}},250);}
 
   function applyStage(){
     if(typeof selected==='undefined'||!selected)return;
-    const st=stage(selected), w=workCard(), q=inspectionSection();
+    const st=stage(selected),w=workCard(),q=inspectionSection();
     if(!w||!q)return;
 
     if(st.type==='oqc'){
-      w.style.display='none'; q.style.display='block';
+      w.style.display='none';q.style.display='block';
       const h=q.querySelector('.head h2');if(h)h.textContent='② 품질검사 실적 입력';
       const badge=q.querySelector('.head .status');if(badge){badge.textContent='OQC 전용';badge.className='status warn';}
       const sel=document.getElementById('inspectionProcess');if(sel){sel.innerHTML='<option value="OQC">OQC</option>';sel.value='OQC';sel.disabled=false;}
     }else if(st.type==='work'||st.type==='packing'){
-      w.style.display=''; q.style.display='none';
+      w.style.display='';q.style.display='none';
       const form=document.getElementById('testForm');
       const sel=document.getElementById('tp');
       if(sel){
-        const list=st.type==='packing'?[PACKING_ROUTE]:PRE_OQC_ROUTES;
-        sel.innerHTML=list.map(p=>`<option value="${esc(p)}">${st.done.has(p)?'✓ ':''}${esc(p)}</option>`).join('');
-        sel.value=st.next; sel.disabled=false;
+        const list=st.type==='packing'?[PACKING_ROUTE]:st.allowed;
+        sel.innerHTML=list.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
+        sel.value=st.next;
+        // 고정구간 및 Packing은 공정 변경 자체를 막음. Inspection 이후 FLEX 구간만 선택 허용.
+        sel.disabled=(st.mode==='fixed'||st.mode==='packing');
       }
       const n=form?.querySelector('.notice');
       if(n){
         if(st.type==='packing')n.innerHTML='<b>OQC 품질검사 완료</b><br>다음 공정은 Packing입니다. 포장 작업 실적을 입력해 주세요.';
-        else{const completed=PRE_OQC_ROUTES.length-st.remaining.length;n.innerHTML=`<b>현재 입력 공정 자동 선택: ${esc(st.next)}</b><br>완료 ${completed}개 / 잔여 ${st.remaining.length}개 · 다음 미완료 제조 공정을 자동 선택했습니다.`;}
+        else if(st.mode==='fixed'){
+          const completed=FIXED_ROUTES.length-st.remaining.length;
+          n.innerHTML=`<b>고정공정 자동 선택: ${esc(st.next)}</b><br>고정공정 ${completed}/${FIXED_ROUTES.length} 완료 · Inspection까지는 순서 변경 및 스킵이 불가능합니다.`;
+        }else{
+          n.innerHTML=`<b>제조공정 선택 가능 구간</b><br>Inspection 이후 남은 제조공정 ${st.remaining.length}개 · 실제 수행할 공정을 선택해 등록하십시오.`;
+        }
       }
       const pw=form?.querySelector('.processes');
       if(pw){
-        const list=st.type==='packing'?[PACKING_ROUTE]:PRE_OQC_ROUTES;
-        pw.innerHTML=list.map((p,i)=>`<button class="${st.done.has(p)?'done':''}" onclick="document.getElementById('tp').selectedIndex=${i}">${st.done.has(p)?'✓ ':''}${esc(p)}${p===st.next?' ← 현재':''}</button>`).join('');
+        if(st.mode==='fixed'){
+          pw.innerHTML=FIXED_ROUTES.map(p=>{
+            const isDone=st.done.has(p),isNow=p===st.next;
+            return `<button class="${isDone?'done':''}" disabled>${isDone?'✓ ':''}${esc(p)}${isNow?' ← 현재':''}</button>`;
+          }).join('');
+        }else{
+          const list=st.type==='packing'?[PACKING_ROUTE]:st.allowed;
+          pw.innerHTML=list.map((p,i)=>`<button ${st.type==='packing'?'disabled':''} onclick="document.getElementById('tp').selectedIndex=${i};document.getElementById('tp').dispatchEvent(new Event('change'))">${esc(p)}${p===st.next?' ← 기본':''}</button>`).join('');
+        }
       }
     }else{
       w.style.display='none';q.style.display='block';
@@ -110,8 +142,16 @@
     const st=stage(selected);
     if(st.type==='oqc')return alert('현재 단계는 OQC 품질검사입니다. 품질검사 실적을 입력해 주세요.');
     if(st.type==='complete')return alert('이미 모든 공정이 완료되었습니다.');
+
+    const sel=document.getElementById('tp');
+    const chosen=sel&&sel.selectedIndex>=0?clean(sel.options[sel.selectedIndex].textContent):'';
+    // 서버 DB 전환 전이라도 화면 조작/개발자도구 등으로 고정공정을 스킵하지 못하도록 저장 직전에 재검증
+    if(st.mode==='fixed'&&chosen!==st.next)return alert(`고정공정 순서 오류입니다. 다음 공정은 ${st.next} 입니다.`);
+    if(st.mode==='packing'&&chosen!==PACKING_ROUTE)return alert('OQC 완료 후 다음 공정은 Packing입니다.');
+    if(st.mode==='flex'&&!st.allowed.includes(chosen))return alert('이미 완료했거나 현재 등록할 수 없는 공정입니다.');
+
     const before=(s.logs||[]).length;
-    const sel=document.getElementById('tp');if(sel&&sel.selectedIndex>=0)sel.options[sel.selectedIndex].value=clean(sel.options[sel.selectedIndex].textContent);
+    if(sel&&sel.selectedIndex>=0)sel.options[sel.selectedIndex].value=chosen;
     const r=typeof prevSaveTest==='function'?prevSaveTest():undefined;
     const after=(s.logs||[]).length;
     if(after>before)startCooldown();
