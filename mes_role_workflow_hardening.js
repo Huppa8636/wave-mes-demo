@@ -1,5 +1,4 @@
 // WAVEPIA MES role/workflow hardening for GitHub DEMO
-// UI hiding alone is not authorization. This PoC also guards write functions client-side.
 (function(){
   const LOGIN_KEY='wave_mes_demo_login_v2';
   const AUDIT=()=>window.waveMesAudit;
@@ -25,6 +24,14 @@
   function can(p){const a=ROLE_PERMS[role()]||[];return a.includes('*')||a.includes(p)}
   function deny(p){alert(`권한이 없습니다.\n현재 역할: ${role()}\n필요 권한: ${p}`);try{AUDIT()?.('ACCESS_DENIED','권한검사','',null,{permission:p,role:role()},'권한 없는 기능 접근 차단')}catch(e){};return false}
   window.waveMesPermission={can,role,actor,permissions:ROLE_PERMS};
+
+  function hasLtcDeepLink(){
+    try{
+      const u=new URL(location.href);
+      if((u.searchParams.get('ltc')||'').trim())return true;
+      return /LTC___[A-Za-z0-9_.\/-]+/i.test(decodeURIComponent(location.href)) || /___\s*[A-Za-z0-9_.\/-]+/i.test(decodeURIComponent(location.href));
+    }catch(e){return false}
+  }
 
   const ACTIONS=[
     {names:['addReq','addRequest','registerRequest'],perm:'WORK_REQUEST_CREATE'},
@@ -99,10 +106,7 @@
       else if(/사용자 등록|자격 수정|작업자 등록|검사자 등록/.test(t))perm='ADMIN_ONLY';
       else if(/DEMO 검사 생성|DEMO 부적합 추가/.test(t))perm='ADMIN_ONLY';
       else if(/이력 삭제/.test(t))perm='DENY_ALWAYS';
-      if(perm){
-        const ok=perm==='DENY_ALWAYS'?false:(perm==='ADMIN_ONLY'?r==='관리자':can(perm));
-        setDisabled(b,!ok,!ok?`현재 역할(${r})에서는 이 기능을 사용할 수 없습니다.`:'');
-      }
+      if(perm){const ok=perm==='DENY_ALWAYS'?false:(perm==='ADMIN_ONLY'?r==='관리자':can(perm));setDisabled(b,!ok,!ok?`현재 역할(${r})에서는 이 기능을 사용할 수 없습니다.`:'')}
     });
   }
 
@@ -117,7 +121,13 @@
 
   function forceLandingOnRoleChange(){
     const r=role();if(!session()||r===lastRole)return;lastRole=r;
-    setTimeout(()=>{const target=ROLE_LANDING[r]||'dash',btn=document.querySelector(`#nav [data-v="${target}"]`);if(btn&&getComputedStyle(btn).display!=='none')btn.click()},80)
+    // QR/deep-link entry owns navigation. Never replace it with the role's normal landing page.
+    if(hasLtcDeepLink())return;
+    setTimeout(()=>{
+      if(hasLtcDeepLink())return;
+      const target=ROLE_LANDING[r]||'dash',btn=document.querySelector(`#nav [data-v="${target}"]`);
+      if(btn&&getComputedStyle(btn).display!=='none')btn.click();
+    },80)
   }
 
   function apply(){syncLifecycle();bindGuards();applyButtons();applyViews();forceLandingOnRoleChange()}
