@@ -15,13 +15,13 @@
     guest:{pass:'Guest!2026',userId:'U-GUEST',name:'DEMO 손님',role:'손님'}
   };
   const ROLE_NAV={
-    관리자:['dash','req','reqs','qreq','ltc','test','inv','issue','quality','audit','admin'],
-    생산:['dash','reqs','ltc','test','inv','quality'],
-    품질:['dash','reqs','qreq','ltc','test','inv','quality','audit'],
-    구매:['dash','reqs','inv','issue'],
-    영업:['dash','req','reqs','ltc','quality'],
-    개발:['dash','reqs','ltc','quality'],
-    경영:['dash','reqs','ltc','inv','quality','audit'],
+    관리자:['dash','req','reqs','qreq','ltc','test','inv','issue','quality','audit','aqms','admin'],
+    생산:['dash','reqs','ltc','test','inv','quality','aqms'],
+    품질:['dash','reqs','qreq','ltc','test','inv','quality','audit','aqms'],
+    구매:['dash','reqs','inv','issue','aqms'],
+    영업:['dash','req','reqs','ltc','quality','aqms'],
+    개발:['dash','reqs','ltc','quality','aqms'],
+    경영:['dash','reqs','ltc','inv','quality','audit','aqms'],
     손님:['dash']
   };
   function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
@@ -45,6 +45,7 @@
     document.querySelectorAll('#nav button').forEach(b=>{b.style.display=allowed.includes(b.dataset.v)?'':'none'});
     const old=document.getElementById('demoUserWrap');if(old)old.style.display='none';
     const current=document.querySelector('#nav button.active');if(current&&current.style.display==='none'){const dash=document.querySelector('#nav [data-v="dash"]');if(dash)dash.click();}
+    try{window.waveMesRefreshEnterpriseNav?.()}catch(e){}
   }
   function renderSession(a){
     const top=document.querySelector('.top');if(!top)return;let x=document.getElementById('wpSessionBar');if(!x){x=document.createElement('div');x.id='wpSessionBar';const badge=top.querySelector('.badge');if(badge)top.insertBefore(x,badge);else top.appendChild(x)}
