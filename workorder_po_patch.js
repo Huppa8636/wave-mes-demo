@@ -10,6 +10,10 @@
     if(/^20\d{6}-\d{4}$/.test(v)) return false;
     return /[A-Z0-9]/i.test(v) && /[-/_]/.test(v);
   }
+  function isOtherFieldLine(v){
+    const x=clean(v).replace(/\s/g,'');
+    return /^(기안번호|문서번호|제품명|제품\/품번|제품번호|품번|품명|수량|요청수량|QTY|납기|완료요청일|고객|프로젝트|문서제목|요청부서|검사)/i.test(x);
+  }
   function parseCustomerPo(text,draft){
     const t=String(text||'').replace(/｜/g,'|');
     // Company work-order PO format, e.g. G08/SD/05511
@@ -22,15 +26,19 @@
       if(!labelRe.test(lines[i])) continue;
       let rest=clean(lines[i].replace(labelRe,''));
       rest=rest.replace(/^[:：#=\-| ]+/,'').trim();
-      if(validLoosePo(rest)) return {value:rest,state:'ok'};
+      if(rest){
+        if(validLoosePo(rest)) return {value:rest,state:'ok'};
+        // A value is visibly present beside the PO label but is not a valid PO: never steal another field.
+        return {value:'',state:'fail'};
+      }
       for(let j=i+1;j<Math.min(lines.length,i+3);j++){
         const n=clean(lines[j]);
         if(labelRe.test(n)) continue;
+        // Once the next form label starts, PO is blank by business rule.
+        if(isOtherFieldLine(n)) break;
         if(validLoosePo(n)) return {value:n,state:'ok'};
-        // A recognizable but invalid token beside the label means OCR failed; never use it.
-        if(n && /[A-Za-z0-9]/.test(n) && /frequency|power|qty|quantity|ghz|mhz/i.test(n)) return {value:'',state:'fail'};
+        if(n && /[A-Za-z0-9]/.test(n)) return {value:'',state:'fail'};
       }
-      // Label exists but has no value: business rule = use the Bizmeka draft number.
       return {value:draft||'',state:'fallback'};
     }
     // No PO field/value in the form: business rule = use the Bizmeka draft number.
