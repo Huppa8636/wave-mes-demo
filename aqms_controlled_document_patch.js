@@ -1,6 +1,7 @@
 // WAVEPIA AQMS controlled-document patch - viewer only; per-row edit is handled separately.
 (function(){
  const DOCS='wave_mes_aqms_controlled_files_v1';
+ let enhancing=false;
  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
  const load=()=>{try{return JSON.parse(localStorage.getItem(DOCS)||'{}')}catch(e){return{}}};
  function addOpenButton(){
@@ -8,23 +9,26 @@
    const text=detail.innerText||'';const m=text.match(/WPQ(?:M|P|I)-?\d+/i);if(!m)return;
    const box=[...detail.querySelectorAll('.aq-box')].find(x=>/현재 승인 문서/.test(x.innerText||''));if(!box)return;
    let b=box.querySelector('.aq-controlled-open');
-   if(!b){
-     b=document.createElement('button');b.className='btn primary aq-controlled-open';b.style='margin-left:8px';b.textContent='승인본 열기';box.appendChild(b);
-   }
+   if(!b){b=document.createElement('button');b.className='btn primary aq-controlled-open';b.style='margin-left:8px';b.textContent='승인본 열기';box.appendChild(b)}
    const no=m[0].toUpperCase();
    b.onclick=e=>{e.preventDefault();e.stopPropagation();openDoc(no,text)};
  }
  function enhance(){
-   const root=document.getElementById('aqmsView');if(!root)return;
-   document.getElementById('aqmsUploadBtn')?.remove();document.getElementById('aqmsQualityEditBtn')?.remove();
-   let bar=document.getElementById('aqmsControlledBar');
-   if(!bar){bar=document.createElement('div');bar.id='aqmsControlledBar';bar.style='margin:12px 0;padding:14px 16px;border:1px solid #b9dceb;border-radius:12px;background:#f4fbfe;display:flex;gap:10px;align-items:center;flex-wrap:wrap';root.prepend(bar)}
-   bar.innerHTML='<b>승인 문서 관리</b><span style="font-size:12px;color:#52606d">일반 사용자: 승인본 열람 전용 · 품질/관리자: 각 문서의 수정 버튼에서 Rev·제목·산출물·승인 PDF 관리 · 기존 이력 보존</span>';
-   addOpenButton();
-   if(root.dataset.controlledClicks!=='1'){
-     root.dataset.controlledClicks='1';
-     root.addEventListener('click',e=>{const item=e.target.closest('[data-aqid],tr,.aqitem');if(!item||e.target.closest('button,a,input,select'))return;const text=item.innerText||'';const m=text.match(/WPQ(?:M|P|I)-?\d+/i);if(m&&(e.detail>1||e.altKey)){e.preventDefault();openDoc(m[0].toUpperCase(),text)}})
-   }
+   if(enhancing)return;const root=document.getElementById('aqmsView');if(!root)return;enhancing=true;
+   try{
+     document.getElementById('aqmsUploadBtn')?.remove();document.getElementById('aqmsQualityEditBtn')?.remove();
+     let bar=document.getElementById('aqmsControlledBar');
+     if(!bar){
+       bar=document.createElement('div');bar.id='aqmsControlledBar';bar.style='margin:12px 0;padding:14px 16px;border:1px solid #b9dceb;border-radius:12px;background:#f4fbfe;display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+       bar.innerHTML='<b>승인 문서 관리</b><span style="font-size:12px;color:#52606d">일반 사용자: 승인본 열람 전용 · 품질/관리자: 각 문서의 수정 버튼에서 Rev·제목·산출물·승인 PDF 관리 · 기존 이력 보존</span>';
+       root.prepend(bar)
+     }
+     addOpenButton();
+     if(root.dataset.controlledClicks!=='1'){
+       root.dataset.controlledClicks='1';
+       root.addEventListener('click',e=>{const item=e.target.closest('[data-aqid],tr,.aqitem');if(!item||e.target.closest('button,a,input,select'))return;const text=item.innerText||'';const m=text.match(/WPQ(?:M|P|I)-?\d+/i);if(m&&(e.detail>1||e.altKey)){e.preventDefault();openDoc(m[0].toUpperCase(),text)}})
+     }
+   }finally{enhancing=false}
  }
  function openDoc(no,title){
    const db=load(),rec=db[no];document.getElementById('aqmsControlledModal')?.remove();
