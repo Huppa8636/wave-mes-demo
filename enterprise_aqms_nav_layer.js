@@ -1,5 +1,5 @@
 // WAVEPIA ERP-MES - single enterprise navigation owner
-// Builds accordion business groups, a direct AQMS entry, and fixed bottom utility buttons.
+// Builds accordion business groups, a direct AQMS entry, and bottom-pinned utility buttons.
 (function(){
   const LOGIN_KEY='wave_mes_demo_login_v2';
   const GROUPS=[
@@ -23,8 +23,9 @@
   function ensureStyle(){
     if(document.getElementById('enterpriseNavSingleStyle'))return;
     const s=document.createElement('style');s.id='enterpriseNavSingleStyle';s.textContent=`
-      #nav.enterprise-nav{display:block!important;overflow-y:auto!important;max-height:calc(100vh - 210px);padding-right:2px}
-      #nav .aqms-group{margin:3px 0 5px;padding:0;border-bottom:1px solid rgba(255,255,255,.07)}
+      .side{display:flex!important;flex-direction:column!important}
+      #nav.enterprise-nav{display:flex!important;flex-direction:column!important;flex:1 1 auto!important;min-height:0!important;max-height:none!important;overflow-y:auto!important;padding-right:2px}
+      #nav .aqms-group{margin:3px 0 5px;padding:0;border-bottom:1px solid rgba(255,255,255,.07);flex:0 0 auto}
       #nav .aqms-group-label{position:relative;font-size:10px;line-height:1.2;color:#82d6f5;font-weight:900;padding:9px 24px 8px 9px;cursor:pointer;user-select:none}
       #nav .aqms-group-label:after{content:'›';position:absolute;right:9px;top:7px;font-size:16px;transition:transform .16s ease;color:#9cc7da}
       #nav .aqms-group.open>.aqms-group-label:after{transform:rotate(90deg)}
@@ -35,11 +36,12 @@
       #nav .aqms-group.open>.aqms-group-label{background:rgba(255,255,255,.045);color:#b7ebff}
       #nav [data-group="g-aqms"]{margin-top:7px!important}
       #nav [data-group="g-aqms"]>.aqms-group-label{color:#9ce8ff}
-      #nav [data-group="g-doc"]{margin-top:15px!important;padding-top:10px!important;border-top:1px solid rgba(255,255,255,.20)!important}
+      #nav [data-group="g-doc"]{margin-top:auto!important;padding-top:12px!important;border-top:1px solid rgba(255,255,255,.24)!important}
       #nav [data-group="g-doc"]>.aqms-group-label,#nav [data-group="g-admin"]>.aqms-group-label{display:none!important}
       #nav [data-group="g-doc"]>button,#nav [data-group="g-admin"]>button{display:block!important;margin:2px 0!important;padding:10px 11px!important;font-size:12px!important}
-      #nav [data-group="g-doc"],#nav [data-group="g-admin"]{border-bottom:0!important}
-      @media(max-width:900px){#nav.enterprise-nav{display:flex!important;max-height:none;overflow-x:auto;overflow-y:hidden;gap:4px}.aqms-group{display:flex!important;align-items:center;margin:0!important;white-space:nowrap}.aqms-group-label{display:none!important}.aqms-group:not(.open)>button{display:block!important}.aqms-group-note{display:none!important}}
+      #nav [data-group="g-doc"],#nav [data-group="g-admin"]{border-bottom:0!important;flex:0 0 auto}
+      .side>.safe{flex:0 0 auto!important;margin-top:8px!important}
+      @media(max-width:900px){.side{display:block!important}.app{grid-template-columns:1fr}#nav.enterprise-nav{display:flex!important;flex-direction:row!important;max-height:none;overflow-x:auto!important;overflow-y:hidden!important;gap:4px}.aqms-group{display:flex!important;align-items:center;margin:0!important;white-space:nowrap}.aqms-group-label{display:none!important}.aqms-group:not(.open)>button{display:block!important}.aqms-group-note{display:none!important}#nav [data-group="g-doc"]{margin-top:0!important;padding-top:0!important;border-top:0!important}}
     `;document.head.appendChild(s);
   }
 
